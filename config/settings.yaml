@@ -1,0 +1,50 @@
+application:
+  name: "LinkedIn Job Agent"
+  version: "1.0.0"
+  debug: false
+
+scraping:
+  rate_limit_seconds: 8
+  max_retries: 3
+  timeout_seconds: 30
+  headless: false
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+
+search:
+  interval_minutes: 60
+  max_results_per_search: 50
+  max_applications_per_day: 10
+  keywords:
+    - "software engineer"
+    - "python developer"
+    - "full stack developer"
+  locations:
+    - "Remote"
+    - "San Francisco"
+    - "New York"
+  experience_levels:
+    - "Mid-Senior level"
+    - "Associate"
+
+matching:
+  minimum_score: 0.7
+  experience_weight: 0.3
+  skills_weight: 0.4
+  location_weight: 0.2
+  company_weight: 0.1
+
+notifications:
+  enabled: true
+  sound: true
+  desktop: true
+  email: false
+
+database:
+  cleanup_days: 30
+  backup_enabled: true
+
+logging:
+  level: "INFO"
+  file: "logs/app.log"
+  max_size_mb: 10
+  backup_count: 5
