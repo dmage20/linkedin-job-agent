@@ -196,3 +196,4 @@ When requirements evolve:
 4. Development continues with new requirements
 
 This approach ensures you maintain control over the development process while getting incremental value and the ability to course-correct based on working software demonstrations.
+- update documentation after the conclusion of each feature development if needed

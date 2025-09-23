@@ -1,0 +1,14 @@
+{"timestamp": "2025-09-23T03:29:24.499259+00:00", "operation": "count_all_jobs", "duration_ms": 0.252, "status": "success", "result_count": 1}
+{"timestamp": "2025-09-23T03:29:24.499796+00:00", "operation": "search_by_title", "duration_ms": 0.433, "status": "success", "result_count": 2}
+{"timestamp": "2025-09-23T03:29:24.500233+00:00", "operation": "search_by_company", "duration_ms": 0.381, "status": "success", "result_count": 1}
+{"timestamp": "2025-09-23T03:29:24.500431+00:00", "operation": "get_recent_jobs", "duration_ms": 0.145, "status": "success", "result_count": 3}
+{"timestamp": "2025-09-23T03:29:24.500918+00:00", "operation": "get_jobs_by_company", "duration_ms": 0.436, "status": "success", "result_count": 3}
+{"timestamp": "2025-09-23T03:29:24.501961+00:00", "operation": "get_job_statistics", "duration_ms": 0.993, "status": "success", "result_count": 1}
+{"timestamp": "2025-09-23T03:29:24.502428+00:00", "operation": "search_with_filters", "duration_ms": 0.415, "status": "success", "result_count": 1}
+{"timestamp": "2025-09-23T03:29:34.747507+00:00", "operation": "count_all_jobs", "duration_ms": 0.163, "status": "success", "result_count": 1}
+{"timestamp": "2025-09-23T03:29:34.747969+00:00", "operation": "search_by_title", "duration_ms": 0.388, "status": "success", "result_count": 2}
+{"timestamp": "2025-09-23T03:29:34.748377+00:00", "operation": "search_by_company", "duration_ms": 0.35, "status": "success", "result_count": 1}
+{"timestamp": "2025-09-23T03:29:34.748679+00:00", "operation": "get_recent_jobs", "duration_ms": 0.244, "status": "success", "result_count": 3}
+{"timestamp": "2025-09-23T03:29:34.749022+00:00", "operation": "get_jobs_by_company", "duration_ms": 0.293, "status": "success", "result_count": 3}
+{"timestamp": "2025-09-23T03:29:34.749982+00:00", "operation": "get_job_statistics", "duration_ms": 0.911, "status": "success", "result_count": 1}
+{"timestamp": "2025-09-23T03:29:34.750464+00:00", "operation": "search_with_filters", "duration_ms": 0.427, "status": "success", "result_count": 1}
