@@ -101,12 +101,49 @@ class JobRepository(BaseRepository):
     def __init__(self, session: Session):
         super().__init__(session, JobModel)
 
-    def get_by_linkedin_id(self, linkedin_job_id: str) -> Optional[JobModel]:
+    def get_job_by_linkedin_id(self, linkedin_job_id: str) -> Optional[JobModel]:
         """Get a job by LinkedIn job ID."""
         try:
             return self.session.query(JobModel).filter(
                 JobModel.linkedin_job_id == linkedin_job_id
             ).first()
+        except SQLAlchemyError as e:
+            raise RuntimeError(f"Database error: {str(e)}")
+
+    def get_by_linkedin_id(self, linkedin_job_id: str) -> Optional[JobModel]:
+        """Alias for get_job_by_linkedin_id for backward compatibility."""
+        return self.get_job_by_linkedin_id(linkedin_job_id)
+
+    def save_job(self, job: JobModel) -> JobModel:
+        """Save a job model to the database."""
+        try:
+            self.session.add(job)
+            self.session.flush()  # Get the ID without committing
+            return job
+        except IntegrityError as e:
+            self.session.rollback()
+            raise ValueError(f"Data integrity error: {str(e)}")
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise RuntimeError(f"Database error: {str(e)}")
+
+    def get_all_jobs(self, limit: Optional[int] = None) -> List[JobModel]:
+        """Get all jobs with optional limit."""
+        return self.get_all(limit=limit)
+
+    def get_total_job_count(self) -> int:
+        """Get total count of jobs."""
+        return self.count()
+
+    def get_jobs_by_date_range(self, limit: int = 100, ascending: bool = False) -> List[JobModel]:
+        """Get jobs ordered by creation date."""
+        try:
+            query = self.session.query(JobModel)
+            if ascending:
+                query = query.order_by(asc(JobModel.created_at))
+            else:
+                query = query.order_by(desc(JobModel.created_at))
+            return query.limit(limit).all()
         except SQLAlchemyError as e:
             raise RuntimeError(f"Database error: {str(e)}")
 
@@ -164,15 +201,17 @@ class JobRepository(BaseRepository):
         except SQLAlchemyError as e:
             raise RuntimeError(f"Database error: {str(e)}")
 
-    def get_recent_jobs(self, days: int = 7, limit: int = 100) -> List[JobModel]:
-        """Get jobs posted in the last N days."""
+    def get_recent_jobs(self, days: Optional[int] = None, limit: int = 100) -> List[JobModel]:
+        """Get recent jobs, optionally filtered by days."""
         try:
-            from datetime import datetime, timedelta, timezone
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+            query = self.session.query(JobModel)
 
-            return self.session.query(JobModel).filter(
-                JobModel.created_at >= cutoff_date
-            ).order_by(desc(JobModel.created_at)).limit(limit).all()
+            if days is not None:
+                from datetime import datetime, timedelta, timezone
+                cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+                query = query.filter(JobModel.created_at >= cutoff_date)
+
+            return query.order_by(desc(JobModel.created_at)).limit(limit).all()
         except SQLAlchemyError as e:
             raise RuntimeError(f"Database error: {str(e)}")
 
