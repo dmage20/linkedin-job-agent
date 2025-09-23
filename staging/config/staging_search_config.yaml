@@ -1,0 +1,29 @@
+search_parameters:
+  keywords:
+    - "software engineer"
+    - "ruby on rails"
+    - "backend engineer"
+  location: "United States"
+  experience_level: "mid"
+  job_type: "full-time"
+  remote: "remote"
+  salary_min: 80000
+  salary_max: 150000
+  company_size: "medium"
+  date_posted: "week"
+
+scraping_limits:
+  jobs_per_session: 30
+  jobs_per_day: 100
+  session_duration_minutes: 25
+  request_delay_seconds: 2.5
+  max_retries: 3
+  retry_delay_seconds: 5.0
+
+user_agents:
+  - "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  - "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+enable_stealth_mode: true
+output_format: "json"
