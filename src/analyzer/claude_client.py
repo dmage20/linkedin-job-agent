@@ -412,3 +412,51 @@ Respond with a JSON object:
         self._circuit_breaker_failures = 0
         self._circuit_breaker_last_failure = None
         logger.info("Circuit breaker manually reset")
+
+    async def generate_content(self, prompt: str, max_tokens: Optional[int] = None, temperature: Optional[float] = None) -> str:
+        """Generate content using Claude API.
+
+        Args:
+            prompt: The prompt to send to Claude
+            max_tokens: Maximum tokens to generate (overrides config)
+            temperature: Temperature for generation (overrides config)
+
+        Returns:
+            Generated content as string
+
+        Raises:
+            CircuitBreakerError: If circuit breaker is open
+            ValueError: If cost limit exceeded
+        """
+        self._check_circuit_breaker()
+        self._check_cost_limit()
+
+        try:
+            # Use provided values or fall back to config
+            tokens = max_tokens or self.config.max_tokens
+            temp = temperature if temperature is not None else self.config.temperature
+
+            response = self.client.messages.create(
+                model=self.config.model,
+                max_tokens=tokens,
+                temperature=temp,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+
+            # Track request
+            self._request_count += 1
+            self._total_cost += self._calculate_cost(response)
+
+            # Reset circuit breaker on success
+            self._circuit_breaker_failures = 0
+
+            return response.content[0].text
+
+        except Exception as e:
+            self._circuit_breaker_failures += 1
+            self._circuit_breaker_last_failure = datetime.now()
+            logger.error(f"Content generation failed: {str(e)}")
+            raise

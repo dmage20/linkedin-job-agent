@@ -7,7 +7,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
 
-from src.database.models import Base
+from src.database.models import Base, JobModel
+from src.analyzer.models import UserProfileModel
+# Import application models to ensure they are registered with Base
+from src.applicator.models import JobApplicationModel, GeneratedContentModel, SafetyEventModel
 
 
 @pytest.fixture(scope="function")
@@ -52,3 +55,49 @@ def clean_db(test_session):
         test_session.execute(table.delete())
     test_session.commit()
     return test_session
+
+
+@pytest.fixture
+def sample_job(test_session):
+    """Create a sample job for testing."""
+    job = JobModel(
+        title="Senior Software Engineer",
+        company="Tech Corp",
+        location="San Francisco, CA",
+        description="Exciting opportunity for a senior software engineer to join our team...",
+        url="https://linkedin.com/jobs/12345",
+        linkedin_job_id="12345",
+        employment_type="Full-time",
+        experience_level="Mid-Senior level",
+        industry="Technology",
+        salary_min=120000,
+        salary_max=180000,
+        is_remote="Hybrid",
+        applicant_count=25
+    )
+    test_session.add(job)
+    test_session.commit()
+    return job
+
+
+@pytest.fixture
+def sample_user_profile(test_session):
+    """Create a sample user profile for testing."""
+    profile = UserProfileModel(
+        user_id="test_user_123",
+        skills=["Python", "JavaScript", "React", "SQL", "AWS"],
+        experience_years=5,
+        desired_roles=["Software Engineer", "Full Stack Developer", "Backend Engineer"],
+        preferred_locations=["San Francisco", "Remote"],
+        salary_expectations={"min": 110000, "max": 170000, "currency": "USD"},
+        work_schedule_preference="full-time",
+        remote_preference="hybrid",
+        education_level="Bachelor's Degree",
+        certifications=["AWS Certified Developer"],
+        industry_preferences=["Technology", "Fintech"],
+        company_size_preference="medium",
+        profile_data={"github": "https://github.com/testuser", "portfolio": "https://testuser.dev"}
+    )
+    test_session.add(profile)
+    test_session.commit()
+    return profile
