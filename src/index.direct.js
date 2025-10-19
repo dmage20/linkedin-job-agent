@@ -1,19 +1,20 @@
 /**
- * LinkedIn Job Application Agent - MCP Version
- * Uses Playwright MCP Server for robust browser automation
+ * LinkedIn Job Application Agent - LLM-Powered Version
+ * Uses Claude API to intelligently navigate and fill job applications
  */
 
+import { chromium } from 'playwright';
 import { config } from 'dotenv';
 import { readFileSync } from 'fs';
-import { PlaywrightMCPClient } from './agent/mcpClient.js';
-import { MCPClaudeJobAgent } from './agent/mcpClaudeAgent.js';
+import { ClaudeJobAgent } from './agent/claudeAgent.js';
 
 // Load environment variables
 config();
 
 class JobApplicationAgent {
   constructor() {
-    this.mcpClient = null;
+    this.browser = null;
+    this.page = null;
     this.claudeAgent = null;
     this.userProfile = null;
   }
@@ -23,7 +24,7 @@ class JobApplicationAgent {
    */
   async init() {
     try {
-      console.log('🤖 LinkedIn Job Application Agent - MCP Powered\n');
+      console.log('🤖 LinkedIn Job Application Agent - LLM-Powered\n');
 
       // Check for API key
       if (!process.env.ANTHROPIC_API_KEY) {
@@ -36,13 +37,21 @@ class JobApplicationAgent {
       // Load user profile
       this.loadUserProfile();
 
-      // Start MCP client
-      this.mcpClient = new PlaywrightMCPClient();
-      await this.mcpClient.start();
+      // Launch browser
+      console.log('Launching browser...');
+      this.browser = await chromium.launch({
+        headless: false, // Show browser so user can monitor
+        slowMo: 50 // Slight delay for visibility
+      });
+
+      this.page = await this.browser.newPage();
+
+      // Set viewport
+      await this.page.setViewportSize({ width: 1280, height: 720 });
 
       // Initialize Claude agent
-      this.claudeAgent = new MCPClaudeJobAgent(
-        this.mcpClient,
+      this.claudeAgent = new ClaudeJobAgent(
+        this.page,
         this.userProfile,
         process.env.ANTHROPIC_API_KEY
       );
@@ -57,7 +66,7 @@ class JobApplicationAgent {
   }
 
   /**
-   * Load user profile
+   * Load user profile from config file
    */
   loadUserProfile() {
     try {
@@ -73,30 +82,22 @@ class JobApplicationAgent {
   }
 
   /**
-   * Manual login flow
+   * Authenticate with LinkedIn (Manual Mode)
    */
   async authenticate() {
     console.log('🔐 Manual Login Mode\n');
-    console.log('Opening LinkedIn in browser...\n');
+    console.log('Opening LinkedIn...');
 
-    try {
-      // Navigate to LinkedIn - this should open the browser window
-      const navResult = await this.mcpClient.navigate('https://www.linkedin.com');
-      console.log('Navigation result:', navResult);
+    // Navigate to LinkedIn
+    await this.page.goto('https://www.linkedin.com', { waitUntil: 'domcontentloaded' });
 
-      // Wait a moment for page to load
-      await new Promise(resolve => setTimeout(resolve, 3000));
-    } catch (error) {
-      console.error('Error during navigation:', error);
-      throw error;
-    }
-
-    console.log('=' .repeat(80));
+    console.log('\n' + '='.repeat(80));
     console.log('👤 Please log into LinkedIn in the browser window');
     console.log('   Complete any 2FA/verification if needed');
     console.log('   Once logged in, press Enter here to continue...');
     console.log('='.repeat(80) + '\n');
 
+    // Wait for user to press Enter
     await this.waitForUserInput();
 
     console.log('✓ Proceeding with logged-in session\n');
@@ -104,7 +105,7 @@ class JobApplicationAgent {
   }
 
   /**
-   * Wait for user input
+   * Wait for user to press Enter
    */
   async waitForUserInput() {
     return new Promise((resolve) => {
@@ -120,6 +121,7 @@ class JobApplicationAgent {
           stdin.removeListener('data', onData);
           resolve();
         } else if (key === '\u0003') {
+          // Ctrl+C
           console.log('\n\n❌ Cancelled by user');
           process.exit(0);
         }
@@ -134,16 +136,19 @@ class JobApplicationAgent {
    */
   async applyToJob(jobUrl) {
     try {
-      console.log('Starting MCP-powered job application...\n');
+      console.log('Starting LLM-powered job application...\n');
 
+      // Let Claude take over and handle the application
       const result = await this.claudeAgent.applyToJob(jobUrl);
 
       if (result && result.success) {
         console.log('\n✅ Success:', result.message);
 
-        // Take screenshot
+        // Take screenshot of final state
         const timestamp = Date.now();
-        await this.mcpClient.takeScreenshot(`screenshots/application-${timestamp}.png`);
+        await this.page.screenshot({
+          path: `./screenshots/application-${timestamp}.png`
+        });
         console.log(`📸 Screenshot saved: screenshots/application-${timestamp}.png`);
 
         return true;
@@ -159,16 +164,16 @@ class JobApplicationAgent {
   }
 
   /**
-   * Cleanup
+   * Cleanup and close browser
    */
   async cleanup() {
     console.log('\n🧹 Cleaning up...');
 
-    if (this.mcpClient) {
-      await this.mcpClient.close();
+    if (this.browser) {
+      await this.browser.close();
     }
 
-    console.log('✓ MCP Server closed');
+    console.log('✓ Browser closed');
   }
 }
 
@@ -179,6 +184,7 @@ async function main() {
   const agent = new JobApplicationAgent();
 
   try {
+    // Get job URL from command line argument
     const jobUrl = process.argv[2];
 
     if (!jobUrl) {
@@ -193,13 +199,13 @@ async function main() {
     // Manual login
     await agent.authenticate();
 
-    // Apply to the job
+    // Apply to the job using Claude
     await agent.applyToJob(jobUrl);
 
   } catch (error) {
     console.error('\n❌ Fatal error:', error.message);
-    console.error(error.stack);
   } finally {
+    // Cleanup
     await agent.cleanup();
     process.exit(0);
   }

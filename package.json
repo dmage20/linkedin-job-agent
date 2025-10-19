@@ -19,10 +19,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "playwright": "^1.48.0",
-    "dotenv": "^16.4.5"
+    "@anthropic-ai/sdk": "^0.67.0",
+    "@playwright/mcp": "^0.0.43",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.48.0"
   },
-  "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
   }

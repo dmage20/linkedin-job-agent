@@ -1,0 +1,83 @@
+{
+  "personalInfo": {
+    "firstName": "Daniel",
+    "lastName": "Mage",
+    "email": "dmage20@gmail.com",
+    "phone": "202-780-4966",
+    "location": {
+      "city": "San Francisco",
+      "state": "CA",
+      "country": "United States",
+      "zipCode": "94607"
+    },
+    "linkedinUrl": "https://www.linkedin.com/in/daniel-mage/"
+  },
+  
+  "workExperience": [
+    {
+      "company": "Booz Allen Hamilton",
+      "title": "Software Engineer",
+      "startDate": "2023-01",
+      "endDate": null,
+      "current": true,
+      "description": "Fixed document processing failures affecting VA legal staff by implementing resilient error handling in background workers. Optimized React frontend performance by implementing debounce mechanism, cutting redundant document requests by 30-50%. Built intelligent download management system with real-time user feedback via progress bars. Optimized document reader with 3-document sliding window to prevent orphaned API calls. Executed production data remediation scripts in Ruby and established client-side observability by implementing frontend error logging."
+    },
+    {
+      "company": "Fave",
+      "title": "Software Engineer",
+      "startDate": "2019-01",
+      "endDate": "2023-12",
+      "current": false,
+      "description": "Led curated collections feature development, increasing user engagement by 20% through collaboration with design and product. Built admin tool for content team, reducing task time from hours to minutes. Integrated Elasticsearch to improve search relevance and UI responsiveness. Reduced homepage API latency from ~60 seconds to under 200 milliseconds. Led API performance optimizations, increasing system reliability and reducing latency for critical resources."
+    }
+  ],
+  
+  "education": [
+    {
+      "school": "University of Maryland",
+      "degree": "Bachelor of Science",
+      "field": "Physical Sciences",
+      "graduationYear": "2007"
+    }
+  ],
+  
+  "skills": [
+    "Ruby",
+    "Rails",
+    "React",
+    "PostgreSQL",
+    "SQL",
+    "Git",
+    "Docker",
+    "AWS",
+    "Sidekiq",
+    "Heroku",
+    "RSpec",
+    "Claude Code",
+    "Python",
+    "Stimulus",
+    "Turbo Frames",
+    "Active Records"
+  ],
+  
+  "documents": {
+    "resume": "./documents/resume.pdf",
+    "coverLetter": "./documents/cover-letter.pdf",
+    "transcript": "./documents/transcript.pdf"
+  },
+  
+  "preferences": {
+    "jobTypes": ["Full-time", "Contract"],
+    "workArrangement": ["Remote"],
+    "willingToRelocate": true,
+    "requiresSponsorship": false,
+    "minimumSalary": 100000,
+    "yearsOfExperience": 6
+  },
+  
+  "commonAnswers": {
+    "whyThisCompany": "Template answer about why interested in the company",
+    "greatestStrength": "Problem solving and attention to detail",
+    "availability": "2 weeks notice"
+  }
+}
