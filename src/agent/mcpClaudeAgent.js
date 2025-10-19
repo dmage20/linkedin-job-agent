@@ -14,6 +14,8 @@ export class MCPClaudeJobAgent {
     this.executor = new MCPBrowserToolExecutor(mcpClient, userProfile);
     this.conversationHistory = [];
     this.maxIterations = 50;
+    this.totalInputTokens = 0;
+    this.totalOutputTokens = 0;
   }
 
   /**
@@ -128,7 +130,13 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
 
         console.log(`💭 Claude is thinking...`);
 
-        const { content, stop_reason } = response;
+        const { content, stop_reason, usage } = response;
+
+        // Track token usage
+        if (usage) {
+          this.totalInputTokens += usage.input_tokens || 0;
+          this.totalOutputTokens += usage.output_tokens || 0;
+        }
 
         this.conversationHistory.push({
           role: 'assistant',
@@ -216,6 +224,9 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
     console.log('\n' + '='.repeat(80) + '\n');
     console.log('🏁 Agent Finished\n');
 
+    // Display cost estimate
+    this.displayCostEstimate(iteration);
+
     return finalResult;
   }
 
@@ -244,6 +255,35 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
 
       stdin.on('data', onData);
     });
+  }
+
+  /**
+   * Display cost estimate for the run
+   */
+  displayCostEstimate(iterations) {
+    // Claude 3.7 Sonnet pricing (as of January 2025)
+    // Input: $3 per million tokens
+    // Output: $15 per million tokens
+    const inputCostPerMillion = 3.00;
+    const outputCostPerMillion = 15.00;
+
+    const inputCost = (this.totalInputTokens / 1_000_000) * inputCostPerMillion;
+    const outputCost = (this.totalOutputTokens / 1_000_000) * outputCostPerMillion;
+    const totalCost = inputCost + outputCost;
+
+    console.log('💰 Cost Estimate:');
+    console.log('─'.repeat(80));
+    console.log(`   Iterations:     ${iterations}`);
+    console.log(`   Input tokens:   ${this.totalInputTokens.toLocaleString()}`);
+    console.log(`   Output tokens:  ${this.totalOutputTokens.toLocaleString()}`);
+    console.log(`   Total tokens:   ${(this.totalInputTokens + this.totalOutputTokens).toLocaleString()}`);
+    console.log('─'.repeat(80));
+    console.log(`   Input cost:     $${inputCost.toFixed(4)} (${this.totalInputTokens.toLocaleString()} tokens @ $${inputCostPerMillion}/M)`);
+    console.log(`   Output cost:    $${outputCost.toFixed(4)} (${this.totalOutputTokens.toLocaleString()} tokens @ $${outputCostPerMillion}/M)`);
+    console.log('─'.repeat(80));
+    console.log(`   TOTAL COST:     $${totalCost.toFixed(4)}`);
+    console.log('─'.repeat(80));
+    console.log('');
   }
 
   getConversationHistory() {
