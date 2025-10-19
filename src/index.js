@@ -7,6 +7,7 @@ import { config } from 'dotenv';
 import { readFileSync } from 'fs';
 import { PlaywrightMCPClient } from './agent/mcpClient.js';
 import { MCPClaudeJobAgent } from './agent/mcpClaudeAgent.js';
+import { OllamaJobAgent } from './agent/ollamaJobAgent.js';
 
 // Load environment variables
 config();
@@ -23,14 +24,26 @@ class JobApplicationAgent {
    */
   async init() {
     try {
+      const useLocalLLM = process.env.USE_LOCAL_LLM === 'true';
+
       console.log('🤖 LinkedIn Job Application Agent - MCP Powered\n');
 
-      // Check for API key
-      if (!process.env.ANTHROPIC_API_KEY) {
-        console.error('❌ ANTHROPIC_API_KEY not found in .env file');
-        console.error('Please add your Anthropic API key to the .env file');
-        console.error('Get your API key from: https://console.anthropic.com/');
-        process.exit(1);
+      if (useLocalLLM) {
+        console.log('🧪 Running in LOCAL MODE with Ollama');
+        console.log('   Model: llama3.1:8b');
+        console.log('   Cost: $0 (FREE!)\n');
+      } else {
+        console.log('🌐 Running in PRODUCTION MODE with Claude API');
+        console.log('   Model: claude-3-7-sonnet-20250219\n');
+
+        // Check for API key only in production mode
+        if (!process.env.ANTHROPIC_API_KEY) {
+          console.error('❌ ANTHROPIC_API_KEY not found in .env file');
+          console.error('Please add your Anthropic API key to the .env file');
+          console.error('Get your API key from: https://console.anthropic.com/');
+          console.error('\nAlternatively, use local mode: USE_LOCAL_LLM=true npm start <job-url>');
+          process.exit(1);
+        }
       }
 
       // Load user profile
@@ -40,12 +53,19 @@ class JobApplicationAgent {
       this.mcpClient = new PlaywrightMCPClient();
       await this.mcpClient.start();
 
-      // Initialize Claude agent
-      this.claudeAgent = new MCPClaudeJobAgent(
-        this.mcpClient,
-        this.userProfile,
-        process.env.ANTHROPIC_API_KEY
-      );
+      // Initialize appropriate agent based on mode
+      if (useLocalLLM) {
+        this.claudeAgent = new OllamaJobAgent(
+          this.mcpClient,
+          this.userProfile
+        );
+      } else {
+        this.claudeAgent = new MCPClaudeJobAgent(
+          this.mcpClient,
+          this.userProfile,
+          process.env.ANTHROPIC_API_KEY
+        );
+      }
 
       console.log('✓ Agent initialized\n');
 
