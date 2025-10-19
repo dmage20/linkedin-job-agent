@@ -1,25 +1,30 @@
 /**
- * Claude Agent - LLM-powered Job Application Agent using MCP Server
- * Uses Playwright MCP Server for robust browser automation
+ * Ollama Agent - Local LLM-powered Job Application Agent using MCP Server
+ * Uses local Ollama instance for zero-cost testing
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { Ollama } from 'ollama';
 import { MCP_BROWSER_TOOLS, MCPBrowserToolExecutor } from './mcpBrowserTools.js';
 
-export class MCPClaudeJobAgent {
-  constructor(mcpClient, userProfile, apiKey) {
+export class OllamaJobAgent {
+  constructor(mcpClient, userProfile, model = null) {
     this.mcp = mcpClient;
     this.userProfile = userProfile;
-    this.anthropic = new Anthropic({ apiKey });
+    this.ollama = new Ollama({ host: 'http://localhost:11434' });
     this.executor = new MCPBrowserToolExecutor(mcpClient, userProfile);
     this.conversationHistory = [];
     this.maxIterations = 50;
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
+
+    // Allow model selection via parameter or environment variable
+    // Default: llama3.1:8b (best quality, needs 5.6GB RAM)
+    // Alternative: llama3.2:3b (lower RAM, needs ~2GB)
+    this.model = model || process.env.OLLAMA_MODEL || 'llama3.1:8b';
   }
 
   /**
-   * Create the system prompt
+   * Create the system prompt (same as Claude agent)
    */
   getSystemPrompt() {
     // Create a condensed version of the user profile to save tokens
@@ -115,10 +120,26 @@ Your tools give you precise control over the browser. Use refs to target element
   }
 
   /**
+   * Convert MCP tools to Ollama tool format
+   */
+  getOllamaTools() {
+    // Ollama uses a similar format to Anthropic, but we need to ensure compatibility
+    return MCP_BROWSER_TOOLS.map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.input_schema
+      }
+    }));
+  }
+
+  /**
    * Run the agent
    */
   async applyToJob(jobUrl) {
-    console.log('\n🤖 Claude Agent Starting (MCP Mode)...\n');
+    console.log('\n🧪 Ollama Agent Starting (LOCAL MODE)...\n');
+    console.log(`Model: ${this.model}`);
     console.log('Job URL:', jobUrl);
     console.log('\n' + '='.repeat(80) + '\n');
 
@@ -142,87 +163,99 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
       console.log(`\n--- Iteration ${iteration} ---\n`);
 
       try {
-        // Keep only the last 10 messages to prevent token bloat
+        // Keep only the last 10 messages to prevent context bloat
         const recentHistory = this.conversationHistory.slice(-10);
 
-        const response = await this.anthropic.messages.create({
-          model: 'claude-3-7-sonnet-20250219',
-          max_tokens: 2048, // Reduced from 4096 to save tokens
-          system: systemPrompt,
-          messages: recentHistory, // Use limited history
-          tools: MCP_BROWSER_TOOLS
+        // Prepare messages for Ollama (include system prompt as first message)
+        const messages = [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          ...recentHistory
+        ];
+
+        const response = await this.ollama.chat({
+          model: this.model,
+          messages: messages,
+          tools: this.getOllamaTools()
         });
 
-        console.log(`💭 Claude is thinking...`);
+        console.log(`💭 Ollama is thinking...`);
 
-        const { content, stop_reason, usage } = response;
+        // Ollama response format is different from Anthropic
+        const { message } = response;
 
-        // Track token usage
-        if (usage) {
-          this.totalInputTokens += usage.input_tokens || 0;
-          this.totalOutputTokens += usage.output_tokens || 0;
+        // Track token usage (if available)
+        if (response.prompt_eval_count) {
+          this.totalInputTokens += response.prompt_eval_count;
+        }
+        if (response.eval_count) {
+          this.totalOutputTokens += response.eval_count;
         }
 
+        // Add assistant response to history
         this.conversationHistory.push({
           role: 'assistant',
-          content: content
+          content: message.content || '',
+          tool_calls: message.tool_calls
         });
 
-        if (stop_reason === 'tool_use') {
+        // Check if Ollama wants to use tools
+        if (message.tool_calls && message.tool_calls.length > 0) {
           const toolResults = [];
 
-          for (const block of content) {
-            if (block.type === 'text') {
-              console.log(`\n💬 Claude: ${block.text}`);
-            } else if (block.type === 'tool_use') {
-              const { id, name, input } = block;
+          for (const toolCall of message.tool_calls) {
+            const { function: func } = toolCall;
+            const toolName = func.name;
+            const toolInput = func.arguments;
 
-              if (name === 'task_complete') {
-                taskComplete = true;
-                finalResult = input;
-                toolResults.push({
-                  type: 'tool_result',
-                  tool_use_id: id,
-                  content: JSON.stringify({ success: true, message: 'Task completed' })
-                });
-                continue;
-              }
-
-              const result = await this.executor.execute(name, input);
-
-              toolResults.push({
-                type: 'tool_result',
-                tool_use_id: id,
-                content: JSON.stringify(result)
-              });
+            // Display any text content
+            if (message.content) {
+              console.log(`\n💬 Ollama: ${message.content}`);
             }
+
+            if (toolName === 'task_complete') {
+              taskComplete = true;
+              finalResult = toolInput;
+              toolResults.push({
+                role: 'tool',
+                content: JSON.stringify({ success: true, message: 'Task completed' })
+              });
+              continue;
+            }
+
+            const result = await this.executor.execute(toolName, toolInput);
+
+            toolResults.push({
+              role: 'tool',
+              content: JSON.stringify(result)
+            });
           }
 
           if (toolResults.length > 0 && !taskComplete) {
-            this.conversationHistory.push({
-              role: 'user',
-              content: toolResults
-            });
+            // Add tool results to conversation
+            this.conversationHistory.push(...toolResults);
           }
-        } else if (stop_reason === 'end_turn') {
-          for (const block of content) {
-            if (block.type === 'text') {
-              console.log(`\n💬 Claude: ${block.text}`);
+        } else {
+          // No tool calls - just text response
+          if (message.content) {
+            console.log(`\n💬 Ollama: ${message.content}`);
 
-              if (block.text.toLowerCase().includes('confirm') ||
-                  block.text.toLowerCase().includes('ready to submit') ||
-                  block.text.toLowerCase().includes('proceed')) {
+            // Check if asking for confirmation
+            if (message.content.toLowerCase().includes('confirm') ||
+                message.content.toLowerCase().includes('ready to submit') ||
+                message.content.toLowerCase().includes('proceed')) {
 
-                console.log('\n⏸️  Waiting for your confirmation...');
-                console.log('Press Enter to proceed, or Ctrl+C to cancel: ');
+              console.log('\n⏸️  Waiting for your confirmation...');
+              console.log('Press Enter to proceed, or Ctrl+C to cancel: ');
 
-                await this.waitForUserInput();
+              await this.waitForUserInput();
 
-                this.conversationHistory.push({
-                  role: 'user',
-                  content: 'Confirmed. Please proceed with the submission.'
-                });
-              }
+              this.conversationHistory.push({
+                role: 'user',
+                content: 'Confirmed. Please proceed with the submission.'
+              });
             }
           }
         }
@@ -239,7 +272,7 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
       } catch (error) {
         console.error('\n❌ Error in agent loop:', error.message);
         if (error.response) {
-          console.error('API Error:', error.response.data);
+          console.error('Ollama Error:', error.response);
         }
         finalResult = { success: false, message: error.message };
         taskComplete = true;
@@ -249,7 +282,7 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
     console.log('\n' + '='.repeat(80) + '\n');
     console.log('🏁 Agent Finished\n');
 
-    // Display cost estimate
+    // Display cost estimate (free for local!)
     this.displayCostEstimate(iteration);
 
     return finalResult;
@@ -286,27 +319,16 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
    * Display cost estimate for the run
    */
   displayCostEstimate(iterations) {
-    // Claude 3.7 Sonnet pricing (as of January 2025)
-    // Input: $3 per million tokens
-    // Output: $15 per million tokens
-    const inputCostPerMillion = 3.00;
-    const outputCostPerMillion = 15.00;
-
-    const inputCost = (this.totalInputTokens / 1_000_000) * inputCostPerMillion;
-    const outputCost = (this.totalOutputTokens / 1_000_000) * outputCostPerMillion;
-    const totalCost = inputCost + outputCost;
-
-    console.log('💰 Cost Estimate:');
+    console.log('💰 Cost Estimate (LOCAL):');
     console.log('─'.repeat(80));
     console.log(`   Iterations:     ${iterations}`);
-    console.log(`   Input tokens:   ${this.totalInputTokens.toLocaleString()}`);
-    console.log(`   Output tokens:  ${this.totalOutputTokens.toLocaleString()}`);
+    console.log(`   Input tokens:   ${this.totalInputTokens.toLocaleString()} (estimated)`);
+    console.log(`   Output tokens:  ${this.totalOutputTokens.toLocaleString()} (estimated)`);
     console.log(`   Total tokens:   ${(this.totalInputTokens + this.totalOutputTokens).toLocaleString()}`);
     console.log('─'.repeat(80));
-    console.log(`   Input cost:     $${inputCost.toFixed(4)} (${this.totalInputTokens.toLocaleString()} tokens @ $${inputCostPerMillion}/M)`);
-    console.log(`   Output cost:    $${outputCost.toFixed(4)} (${this.totalOutputTokens.toLocaleString()} tokens @ $${outputCostPerMillion}/M)`);
+    console.log(`   TOTAL COST:     $0.0000 (FREE! 🎉)`);
     console.log('─'.repeat(80));
-    console.log(`   TOTAL COST:     $${totalCost.toFixed(4)}`);
+    console.log(`   Note: Running locally with Ollama - unlimited free usage!`);
     console.log('─'.repeat(80));
     console.log('');
   }
