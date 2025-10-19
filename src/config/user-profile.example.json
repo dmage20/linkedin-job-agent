@@ -1,0 +1,65 @@
+{
+  "personalInfo": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john.doe@email.com",
+    "phone": "+1-555-0123",
+    "location": {
+      "city": "San Francisco",
+      "state": "CA",
+      "country": "United States",
+      "zipCode": "94102"
+    },
+    "linkedinUrl": "https://www.linkedin.com/in/johndoe"
+  },
+  
+  "workExperience": [
+    {
+      "company": "Tech Company Inc.",
+      "title": "Software Engineer",
+      "startDate": "2020-01",
+      "endDate": "2023-12",
+      "current": false,
+      "description": "Developed web applications using React and Node.js"
+    }
+  ],
+  
+  "education": [
+    {
+      "school": "University of Example",
+      "degree": "Bachelor of Science",
+      "field": "Computer Science",
+      "graduationYear": "2020"
+    }
+  ],
+  
+  "skills": [
+    "JavaScript",
+    "Python",
+    "React",
+    "Node.js",
+    "SQL",
+    "Git"
+  ],
+  
+  "documents": {
+    "resume": "./documents/resume.pdf",
+    "coverLetter": "./documents/cover-letter.pdf",
+    "transcript": "./documents/transcript.pdf"
+  },
+  
+  "preferences": {
+    "jobTypes": ["Full-time", "Contract"],
+    "workArrangement": ["Remote", "Hybrid"],
+    "willingToRelocate": false,
+    "requiresSponsorship": false,
+    "minimumSalary": 100000,
+    "yearsOfExperience": 3
+  },
+  
+  "commonAnswers": {
+    "whyThisCompany": "Template answer about why interested in the company",
+    "greatestStrength": "Problem solving and attention to detail",
+    "availability": "2 weeks notice"
+  }
+}
