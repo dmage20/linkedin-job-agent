@@ -137,6 +137,43 @@ export const MCP_BROWSER_TOOLS = [
     }
   },
   {
+    name: "batch_fill_fields",
+    description: "Fill multiple form fields in a single operation. This is much more efficient than filling fields one at a time. Use this when you've identified multiple fields that need to be filled on the current form page. You can mix different field types (textbox, combobox, checkbox, radio, slider).",
+    input_schema: {
+      type: "object",
+      properties: {
+        fields: {
+          type: "array",
+          description: "Array of fields to fill",
+          items: {
+            type: "object",
+            properties: {
+              name: {
+                type: "string",
+                description: "Human-readable field name (e.g., 'Phone number', 'Email address')"
+              },
+              type: {
+                type: "string",
+                enum: ["textbox", "checkbox", "radio", "combobox", "slider"],
+                description: "Type of the field"
+              },
+              ref: {
+                type: "string",
+                description: "The reference ID from the snapshot"
+              },
+              value: {
+                type: "string",
+                description: "Value to fill in the field. For checkboxes: 'true' or 'false'. For combobox: the text of the option to select."
+              }
+            },
+            required: ["name", "type", "ref", "value"]
+          }
+        }
+      },
+      required: ["fields"]
+    }
+  },
+  {
     name: "task_complete",
     description: "Signal that the task is complete",
     input_schema: {
@@ -197,6 +234,9 @@ export class MCPBrowserToolExecutor {
 
         case 'press_key':
           return await this.pressKey(toolInput.key);
+
+        case 'batch_fill_fields':
+          return await this.batchFillFields(toolInput.fields);
 
         case 'task_complete':
           return { success: toolInput.success, message: toolInput.message };
@@ -365,6 +405,28 @@ export class MCPBrowserToolExecutor {
     return {
       success: true,
       message: `Pressed ${key}`,
+      result
+    };
+  }
+
+  async batchFillFields(fields) {
+    console.log(`   📝 Batch filling ${fields.length} fields...`);
+
+    // Log each field for visibility
+    for (const field of fields) {
+      console.log(`      - ${field.name}: "${field.value}" (${field.type})`);
+    }
+
+    const result = await this.mcp.fillForm(fields);
+
+    console.log(`   ✓ Batch filled ${fields.length} fields`);
+
+    // Wait a moment for the page to update after all fills
+    await this.wait(500);
+
+    return {
+      success: true,
+      message: `Batch filled ${fields.length} fields: ${fields.map(f => f.name).join(', ')}`,
       result
     };
   }

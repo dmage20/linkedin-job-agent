@@ -205,6 +205,11 @@ export class PlaywrightMCPClient extends EventEmitter {
     });
   }
 
+  async fillForm(fields) {
+    // For batch filling multiple fields
+    return await this.callTool('browser_fill_form', { fields });
+  }
+
   async waitFor(time) {
     return await this.callTool('browser_wait_for', { time: time / 1000 });
   }
