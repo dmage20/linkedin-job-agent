@@ -63,7 +63,7 @@ WORKFLOW (OPTIMIZED):
 3. Find "Easy Apply" button in the snapshot and click it using its ref
 4. Wait 2 seconds for modal to load
 5. Take snapshot → you'll see the modal form fields
-6. Fill each field using its ref from the snapshot
+6. **BATCH FILL FIELDS** - When you see multiple fields, use batch_fill_fields to fill them ALL AT ONCE (much faster!)
 7. Click "Next" or "Review" (using ref from snapshot)
 8. Repeat steps 5-7 until you reach the review/submit page
 9. ASK USER FOR CONFIRMATION before final submit
@@ -72,11 +72,16 @@ WORKFLOW (OPTIMIZED):
 
 **CRITICAL**: ALWAYS take a snapshot BEFORE scrolling. The snapshot shows you what's on the page - don't scroll blindly!
 
+**EFFICIENCY TIP**: Use batch_fill_fields instead of type_text when you have multiple fields!
+- ✅ GOOD: batch_fill_fields with 5 fields = 1 operation
+- ❌ SLOW: type_text 5 times = 5 operations (much slower and more expensive)
+
 TIPS:
 - The snapshot shows the accessibility tree with refs embedded
 - Look for patterns like: button "Text" [ref=X] or textbox "Label" [ref=Y]
 - **MODALS/POPUPS**: After clicking "Easy Apply", a modal popup will appear with the form
 - **The snapshot will automatically prioritize modal content** - focus on that!
+- **BATCH OPERATIONS**: When you see a form with multiple fields, gather all refs and values, then use batch_fill_fields once
 - If you can't find an element, scroll and take a new snapshot
 - Wait briefly after actions (use wait tool) for page to update
 - Multi-step forms: complete each step, click Next, repeat
