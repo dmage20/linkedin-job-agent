@@ -72,9 +72,29 @@ WORKFLOW (OPTIMIZED):
 
 **CRITICAL**: ALWAYS take a snapshot BEFORE scrolling. The snapshot shows you what's on the page - don't scroll blindly!
 
-**EFFICIENCY TIP**: Use batch_fill_fields instead of type_text when you have multiple fields!
+**EFFICIENCY TIP #1**: Use batch_fill_fields instead of type_text when you have multiple fields!
 - ✅ GOOD: batch_fill_fields with 5 fields = 1 operation
 - ❌ SLOW: type_text 5 times = 5 operations (much slower and more expensive)
+
+**EFFICIENCY TIP #2**: You DON'T need to take a snapshot after EVERY action!
+SKIP snapshots after these actions (they're predictable and always work):
+- ✅ batch_fill_fields → You know the fields were filled successfully
+- ✅ type_text → You know the text was typed successfully
+- ✅ select_option → You know the option was selected successfully
+- ✅ wait → Just waiting, no need to verify
+
+TAKE snapshots after these actions (they change page state):
+- ❌ click → Buttons can trigger modals, navigation, page changes - you need to see what happened
+- ❌ navigate → New page loaded, you need to see what's there
+- ❌ scroll → Page content changed, you need to see what's now visible
+- ❌ When unsure or if an error occurred
+
+**Example efficient workflow**:
+1. take_snapshot → see form with 5 fields
+2. batch_fill_fields (all 5 fields) → skip snapshot, you know they're filled
+3. click "Next" button → now take snapshot to see next page
+
+This can reduce iterations from 18 → 10-12 (40% faster, 40% cheaper)!
 
 TIPS:
 - The snapshot shows the accessibility tree with refs embedded
