@@ -29,8 +29,14 @@ class JobApplicationAgent {
       console.log('🤖 LinkedIn Job Application Agent - MCP Powered\n');
 
       if (useLocalLLM) {
+        const ollamaModel = process.env.OLLAMA_MODEL || 'llama3.1:8b';
         console.log('🧪 Running in LOCAL MODE with Ollama');
-        console.log('   Model: llama3.1:8b');
+        console.log(`   Model: ${ollamaModel}`);
+        if (ollamaModel === 'llama3.1:8b') {
+          console.log('   RAM needed: ~5.6 GB');
+        } else if (ollamaModel === 'llama3.2:3b') {
+          console.log('   RAM needed: ~2 GB (low-RAM mode)');
+        }
         console.log('   Cost: $0 (FREE!)\n');
       } else {
         console.log('🌐 Running in PRODUCTION MODE with Claude API');

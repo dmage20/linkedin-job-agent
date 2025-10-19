@@ -7,7 +7,7 @@ import { Ollama } from 'ollama';
 import { MCP_BROWSER_TOOLS, MCPBrowserToolExecutor } from './mcpBrowserTools.js';
 
 export class OllamaJobAgent {
-  constructor(mcpClient, userProfile) {
+  constructor(mcpClient, userProfile, model = null) {
     this.mcp = mcpClient;
     this.userProfile = userProfile;
     this.ollama = new Ollama({ host: 'http://localhost:11434' });
@@ -16,6 +16,11 @@ export class OllamaJobAgent {
     this.maxIterations = 50;
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
+
+    // Allow model selection via parameter or environment variable
+    // Default: llama3.1:8b (best quality, needs 5.6GB RAM)
+    // Alternative: llama3.2:3b (lower RAM, needs ~2GB)
+    this.model = model || process.env.OLLAMA_MODEL || 'llama3.1:8b';
   }
 
   /**
@@ -134,7 +139,7 @@ Your tools give you precise control over the browser. Use refs to target element
    */
   async applyToJob(jobUrl) {
     console.log('\n🧪 Ollama Agent Starting (LOCAL MODE)...\n');
-    console.log('Model: llama3.1:8b');
+    console.log(`Model: ${this.model}`);
     console.log('Job URL:', jobUrl);
     console.log('\n' + '='.repeat(80) + '\n');
 
@@ -171,7 +176,7 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
         ];
 
         const response = await this.ollama.chat({
-          model: 'llama3.1:8b',
+          model: this.model,
           messages: messages,
           tools: this.getOllamaTools()
         });
