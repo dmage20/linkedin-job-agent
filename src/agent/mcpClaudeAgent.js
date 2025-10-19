@@ -16,6 +16,24 @@ export class MCPClaudeJobAgent {
     this.maxIterations = 50;
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
+    this.totalCacheCreationTokens = 0;
+    this.totalCacheReadTokens = 0;
+  }
+
+  /**
+   * Get tools with prompt caching enabled on the last tool
+   */
+  getCachedTools() {
+    return MCP_BROWSER_TOOLS.map((tool, index) => {
+      if (index === MCP_BROWSER_TOOLS.length - 1) {
+        // Add cache_control to the last tool to cache the entire tools array
+        return {
+          ...tool,
+          cache_control: { type: "ephemeral" }
+        };
+      }
+      return tool;
+    });
   }
 
   /**
@@ -123,19 +141,27 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
         const response = await this.anthropic.messages.create({
           model: 'claude-3-7-sonnet-20250219',
           max_tokens: 2048, // Reduced from 4096 to save tokens
-          system: systemPrompt,
+          system: [
+            {
+              type: "text",
+              text: systemPrompt,
+              cache_control: { type: "ephemeral" }
+            }
+          ],
           messages: recentHistory, // Use limited history
-          tools: MCP_BROWSER_TOOLS
+          tools: this.getCachedTools()
         });
 
         console.log(`💭 Claude is thinking...`);
 
         const { content, stop_reason, usage } = response;
 
-        // Track token usage
+        // Track token usage (including cache metrics)
         if (usage) {
           this.totalInputTokens += usage.input_tokens || 0;
           this.totalOutputTokens += usage.output_tokens || 0;
+          this.totalCacheCreationTokens += usage.cache_creation_input_tokens || 0;
+          this.totalCacheReadTokens += usage.cache_read_input_tokens || 0;
         }
 
         this.conversationHistory.push({
@@ -262,26 +288,58 @@ Start by navigating to the URL and taking a snapshot to see what's available.`;
    */
   displayCostEstimate(iterations) {
     // Claude 3.7 Sonnet pricing (as of January 2025)
-    // Input: $3 per million tokens
+    // Regular input: $3 per million tokens
+    // Cache writes (creation): $3.75 per million tokens (25% more)
+    // Cache reads: $0.30 per million tokens (90% cheaper)
     // Output: $15 per million tokens
     const inputCostPerMillion = 3.00;
+    const cacheWriteCostPerMillion = 3.75;
+    const cacheReadCostPerMillion = 0.30;
     const outputCostPerMillion = 15.00;
 
     const inputCost = (this.totalInputTokens / 1_000_000) * inputCostPerMillion;
+    const cacheWriteCost = (this.totalCacheCreationTokens / 1_000_000) * cacheWriteCostPerMillion;
+    const cacheReadCost = (this.totalCacheReadTokens / 1_000_000) * cacheReadCostPerMillion;
     const outputCost = (this.totalOutputTokens / 1_000_000) * outputCostPerMillion;
-    const totalCost = inputCost + outputCost;
+    const totalCost = inputCost + cacheWriteCost + cacheReadCost + outputCost;
+
+    // Calculate savings from caching
+    const withoutCacheCost = ((this.totalInputTokens + this.totalCacheReadTokens) / 1_000_000) * inputCostPerMillion;
+    const cacheSavings = withoutCacheCost - (inputCost + cacheReadCost);
 
     console.log('💰 Cost Estimate:');
     console.log('─'.repeat(80));
     console.log(`   Iterations:     ${iterations}`);
     console.log(`   Input tokens:   ${this.totalInputTokens.toLocaleString()}`);
     console.log(`   Output tokens:  ${this.totalOutputTokens.toLocaleString()}`);
-    console.log(`   Total tokens:   ${(this.totalInputTokens + this.totalOutputTokens).toLocaleString()}`);
+
+    // Show cache metrics if caching was used
+    if (this.totalCacheCreationTokens > 0 || this.totalCacheReadTokens > 0) {
+      console.log('─'.repeat(80));
+      console.log('   🚀 PROMPT CACHING:');
+      console.log(`   Cache writes:   ${this.totalCacheCreationTokens.toLocaleString()} tokens (first request)`);
+      console.log(`   Cache reads:    ${this.totalCacheReadTokens.toLocaleString()} tokens (cached reuse)`);
+      console.log(`   Cache hit rate: ${this.totalCacheReadTokens > 0 ? ((this.totalCacheReadTokens / (this.totalCacheReadTokens + this.totalCacheCreationTokens)) * 100).toFixed(1) : '0'}%`);
+    }
+
     console.log('─'.repeat(80));
     console.log(`   Input cost:     $${inputCost.toFixed(4)} (${this.totalInputTokens.toLocaleString()} tokens @ $${inputCostPerMillion}/M)`);
+
+    if (this.totalCacheCreationTokens > 0) {
+      console.log(`   Cache write:    $${cacheWriteCost.toFixed(4)} (${this.totalCacheCreationTokens.toLocaleString()} tokens @ $${cacheWriteCostPerMillion}/M)`);
+    }
+    if (this.totalCacheReadTokens > 0) {
+      console.log(`   Cache read:     $${cacheReadCost.toFixed(4)} (${this.totalCacheReadTokens.toLocaleString()} tokens @ $${cacheReadCostPerMillion}/M)`);
+    }
+
     console.log(`   Output cost:    $${outputCost.toFixed(4)} (${this.totalOutputTokens.toLocaleString()} tokens @ $${outputCostPerMillion}/M)`);
     console.log('─'.repeat(80));
     console.log(`   TOTAL COST:     $${totalCost.toFixed(4)}`);
+
+    if (cacheSavings > 0) {
+      console.log(`   💸 Cache saved: $${cacheSavings.toFixed(4)} (${((cacheSavings / withoutCacheCost) * 100).toFixed(1)}% reduction)`);
+    }
+
     console.log('─'.repeat(80));
     console.log('');
   }
