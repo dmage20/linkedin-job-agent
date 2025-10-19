@@ -164,8 +164,6 @@ export class MCPBrowserToolExecutor {
     this.mcp = mcpClient;
     this.userProfile = userProfile;
     this.lastSnapshot = null;
-    this.pageState = 'initial'; // Track page state: initial, form, review
-    this.snapshotCount = 0;
   }
 
   async execute(toolName, toolInput) {
@@ -212,58 +210,6 @@ export class MCPBrowserToolExecutor {
     }
   }
 
-  /**
-   * Filter out non-essential content from snapshot to save tokens
-   */
-  filterSnapshot(snapshotText) {
-    let filtered = snapshotText;
-
-    // Remove excessive navigation/header content (keep first occurrence only)
-    const navPatterns = [
-      /(?:- link "Jobs".*?- link "Messaging")/gs,
-      /(?:- button "Skip to.*?- button "Dismiss")/gs,
-      /(?:- banner.*?(?=- (main|dialog|heading)))/gs
-    ];
-
-    // For subsequent snapshots, aggressively filter navigation
-    if (this.snapshotCount > 1) {
-      for (const pattern of navPatterns) {
-        filtered = filtered.replace(pattern, '... [Navigation removed] ...');
-      }
-    }
-
-    // Remove verbose text blocks, keep structure
-    // Keep short text (< 100 chars), remove long paragraphs
-    filtered = filtered.replace(/- text "([^"]{100,})"/g, '- text "[...text...]"');
-
-    // Compress repetitive list items
-    filtered = filtered.replace(/(- listitem.*?\n){5,}/g, (match) => {
-      const lines = match.split('\n').filter(l => l.trim());
-      return `${lines[0]}\n... [${lines.length - 1} more items] ...\n`;
-    });
-
-    return filtered;
-  }
-
-  /**
-   * Detect page state for context-aware truncation
-   */
-  detectPageState(snapshotText) {
-    const lower = snapshotText.toLowerCase();
-
-    if (lower.includes('review your application') || lower.includes('heading "review"')) {
-      return 'review';
-    }
-    if (lower.includes('dialog') || lower.includes('modal') || lower.includes('heading "contact info"')) {
-      return 'form';
-    }
-    if (lower.includes('easy apply')) {
-      return 'initial';
-    }
-
-    return this.pageState; // Keep current state if unclear
-  }
-
   async takeSnapshot() {
     const result = await this.mcp.snapshot();
 
@@ -272,40 +218,31 @@ export class MCPBrowserToolExecutor {
     const snapshotText = result.content?.[0]?.text || result.snapshot || '';
 
     this.lastSnapshot = snapshotText;
-    this.snapshotCount++;
 
-    console.log(`   📸 Snapshot taken (count: ${this.snapshotCount})`);
+    console.log(`   📸 Snapshot taken`);
     console.log(`   Snapshot length: ${snapshotText.length} characters`);
 
-    // Detect page state for context-aware processing
-    this.pageState = this.detectPageState(snapshotText);
-    console.log(`   Page state: ${this.pageState}`);
-
-    // STEP 1: Apply intelligent filtering to reduce verbosity
-    let filteredSnapshot = this.filterSnapshot(snapshotText);
-    console.log(`   🔍 After filtering: ${filteredSnapshot.length} characters (${((1 - filteredSnapshot.length / snapshotText.length) * 100).toFixed(1)}% reduction)`);
-
-    // STEP 2: Context-aware truncation based on page state
-    // More aggressive truncation (10k instead of 15k) since we're filtering now
-    const maxLength = this.pageState === 'form' ? 10000 : 12000;
-    let truncatedSnapshot = filteredSnapshot;
+    // SMART TRUNCATION: Prioritize modal/dialog content
+    const maxLength = 15000; // Increased from 10k to 15k for modals
+    let truncatedSnapshot = snapshotText;
 
     // Check if there's a modal/dialog in the snapshot
     const modalKeywords = ['dialog', 'modal', 'popup', 'artdeco-modal', 'application-container'];
     const hasModal = modalKeywords.some(keyword =>
-      filteredSnapshot.toLowerCase().includes(keyword)
+      snapshotText.toLowerCase().includes(keyword)
     );
 
     if (hasModal) {
-      console.log(`   🔔 Modal/dialog detected`);
+      console.log(`   🔔 Modal/dialog detected in snapshot`);
 
       // Try to extract just the modal content
+      // Look for common modal patterns
       let modalStart = -1;
       let modalEnd = -1;
 
       // Find the start of the modal
-      for (const keyword of ['- dialog', 'heading "Sign in"', 'heading "Review"', 'heading "Contact info"', 'heading "Additional Questions"']) {
-        const idx = filteredSnapshot.indexOf(keyword);
+      for (const keyword of ['- dialog', 'heading "Sign in"', 'heading "Review"', 'heading "Contact info"']) {
+        const idx = snapshotText.indexOf(keyword);
         if (idx !== -1) {
           modalStart = idx;
           break;
@@ -314,38 +251,27 @@ export class MCPBrowserToolExecutor {
 
       if (modalStart !== -1) {
         // Take content from modal start
-        modalEnd = Math.min(modalStart + maxLength, filteredSnapshot.length);
-        truncatedSnapshot = filteredSnapshot.substring(modalStart, modalEnd);
-        console.log(`   ✂️  Extracted modal content: ${truncatedSnapshot.length} chars`);
+        modalEnd = Math.min(modalStart + maxLength, snapshotText.length);
+        truncatedSnapshot = snapshotText.substring(modalStart, modalEnd);
+        console.log(`   ✂️  Extracted modal content (${truncatedSnapshot.length} chars)`);
 
-        if (modalEnd < filteredSnapshot.length) {
+        if (modalEnd < snapshotText.length) {
           truncatedSnapshot += `\n\n... [Content after modal truncated. Focus on the modal/dialog above.]`;
         }
       } else {
         // Modal detected but couldn't extract - take last part (modals often at end)
-        if (filteredSnapshot.length > maxLength) {
-          const startPos = Math.max(0, filteredSnapshot.length - maxLength);
-          truncatedSnapshot = `[Background truncated...]\n\n` + filteredSnapshot.substring(startPos);
-          console.log(`   ⚠️  Modal detected, showing last ${maxLength} chars`);
+        if (snapshotText.length > maxLength) {
+          const startPos = Math.max(0, snapshotText.length - maxLength);
+          truncatedSnapshot = `[Background content truncated...]\n\n` + snapshotText.substring(startPos);
+          console.log(`   ⚠️  Modal detected but couldn't extract precisely. Showing last ${maxLength} chars (where modals usually are)`);
         }
       }
-    } else if (filteredSnapshot.length > maxLength) {
-      // No modal - use standard truncation
-      if (this.pageState === 'initial') {
-        // Initial page: take first part (to find Easy Apply button)
-        truncatedSnapshot = filteredSnapshot.substring(0, maxLength) +
-          `\n\n... [Snapshot truncated. Original: ${filteredSnapshot.length} chars. Scroll if needed.]`;
-      } else {
-        // Form state: take last part (where form content usually is)
-        const startPos = Math.max(0, filteredSnapshot.length - maxLength);
-        truncatedSnapshot = `[Earlier content truncated...]\n\n` + filteredSnapshot.substring(startPos);
-      }
-      console.log(`   ✂️  Truncated to ${maxLength} chars (${this.pageState} mode)`);
+    } else if (snapshotText.length > maxLength) {
+      // No modal - use standard truncation (first N chars)
+      truncatedSnapshot = snapshotText.substring(0, maxLength) +
+        `\n\n... [Snapshot truncated. Original length: ${snapshotText.length} chars. Scroll down if needed.]`;
+      console.log(`   ⚠️  No modal detected. Truncated from ${snapshotText.length} to ${maxLength} chars`);
     }
-
-    // STEP 3: Final size reporting
-    const totalReduction = ((1 - truncatedSnapshot.length / snapshotText.length) * 100).toFixed(1);
-    console.log(`   📊 Final size: ${truncatedSnapshot.length} chars (${totalReduction}% total reduction)`);
 
     // Return the snapshot in a format Claude can understand
     return {
