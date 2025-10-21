@@ -25,6 +25,10 @@ export class LLMAgent {
     this.decisions = [];
     this.logDir = join(process.cwd(), 'logs');
 
+    // Element reference tracking
+    this.refCounter = 0;
+    this.elementMap = new Map(); // Maps ref IDs to element info
+
     // Ensure logs directory exists
     try {
       mkdirSync(this.logDir, { recursive: true });
@@ -172,7 +176,7 @@ export class LLMAgent {
     }
 
     // Click Easy Apply using Playwright locator
-    await this._clickElement(decision.element_description);
+    await this._clickElement(decision.element_description, decision.element_ref);
     return true;
   }
 
@@ -203,12 +207,19 @@ export class LLMAgent {
         await this._handleSubmit(decision);
         break; // Application complete
       } else if (decision.action === 'click') {
-        await this._clickElement(decision.element_description);
+        await this._clickElement(decision.element_description, decision.element_ref);
       } else if (decision.action === 'fill') {
         await this._fillFields(decision.fields);
         // After filling, click next
         await this._delay(1000);
-        await this._clickElement('Next');
+        // Find Next button from the last snapshot
+        const nextButton = Array.from(this.elementMap.entries())
+          .find(([ref, info]) => info.role === 'button' && info.name && info.name.match(/next|continue/i));
+        if (nextButton) {
+          await this._clickElement(nextButton[1].name, nextButton[0]);
+        } else {
+          await this._clickElement('Next');
+        }
       } else if (decision.action === 'pause_for_manual') {
         await this._handlePause(decision);
       } else if (decision.action === 'error') {
@@ -225,6 +236,10 @@ export class LLMAgent {
    * Get page snapshot from Playwright accessibility tree
    */
   async _getSnapshot() {
+    // Reset element tracking for new snapshot
+    this.refCounter = 0;
+    this.elementMap.clear();
+
     const snapshot = await this.page.accessibility.snapshot();
     return this._formatSnapshot(snapshot);
   }
@@ -243,6 +258,25 @@ export class LLMAgent {
 
     // Add name/label
     if (node.name) line += ` "${node.name}"`;
+
+    // Generate ref for interactive elements
+    const interactiveRoles = ['button', 'link', 'textbox', 'combobox', 'checkbox', 'radio', 'searchbox', 'textarea'];
+    let ref = null;
+    if (node.role && interactiveRoles.includes(node.role)) {
+      this.refCounter++;
+      ref = `e${this.refCounter}`;
+
+      // Store element info for later reference
+      this.elementMap.set(ref, {
+        role: node.role,
+        name: node.name || '',
+        value: node.value || '',
+        checked: node.checked || false,
+        selected: node.selected || false
+      });
+
+      line += ` [ref=${ref}]`;
+    }
 
     // Add properties
     if (node.level) line += ` [level=${node.level}]`;
@@ -329,12 +363,29 @@ export class LLMAgent {
   /**
    * Click element using Playwright locator
    */
-  async _clickElement(description) {
-    console.log(`👆 Clicking: "${description}"`);
+  async _clickElement(description, elementRef = null) {
+    console.log(`👆 Clicking: "${description}"${elementRef ? ` [${elementRef}]` : ''}`);
 
     try {
-      // Try multiple selector strategies
       const page = this.page;
+
+      // Strategy 0: Use ref if provided
+      if (elementRef && this.elementMap.has(elementRef)) {
+        const elementInfo = this.elementMap.get(elementRef);
+        console.log(`   Using ref: ${elementRef} (${elementInfo.role}: "${elementInfo.name}")`);
+
+        try {
+          if (elementInfo.role === 'button') {
+            await page.getByRole('button', { name: elementInfo.name }).click({ timeout: 3000 });
+            return;
+          } else if (elementInfo.role === 'link') {
+            await page.getByRole('link', { name: elementInfo.name }).click({ timeout: 3000 });
+            return;
+          }
+        } catch (e) {
+          console.log(`   Ref-based click failed, falling back to text-based strategies`);
+        }
+      }
 
       // Strategy 1: Try exact button text
       try {
@@ -381,32 +432,54 @@ export class LLMAgent {
     console.log(`📝 Filling ${fields.length} field(s)...`);
 
     for (const field of fields) {
-      console.log(`  - ${field.field_type}: "${field.value}"`);
+      const fieldLabel = field.ref && this.elementMap.has(field.ref)
+        ? this.elementMap.get(field.ref).name
+        : 'unknown';
+      console.log(`  - ${field.field_type} [${field.ref}]: "${fieldLabel}" = "${field.value}"`);
 
       try {
-        if (field.field_type === 'textbox') {
-          await this.page.fill(`input[type="text"]`, field.value);
+        // Look up element info from ref
+        if (!field.ref || !this.elementMap.has(field.ref)) {
+          console.warn(`  ⚠️  No ref mapping found for ${field.ref}, skipping`);
+          continue;
+        }
+
+        const elementInfo = this.elementMap.get(field.ref);
+        const elementName = elementInfo.name;
+
+        if (field.field_type === 'textbox' || field.field_type === 'searchbox') {
+          // Use getByRole with the element's name/label
+          const textbox = this.page.getByRole('textbox', { name: elementName });
+          await textbox.fill(field.value, { timeout: 3000 });
+
         } else if (field.field_type === 'combobox') {
+          // Find combobox by its label/name
+          const combobox = this.page.getByRole('combobox', { name: elementName });
+
           // Try multiple strategies to match dropdown options
-          const select = this.page.locator('select').first();
           let matched = false;
 
           // Strategy 1: Exact value match
           try {
-            await select.selectOption(field.value, { timeout: 3000 });
+            await combobox.selectOption(field.value, { timeout: 2000 });
             matched = true;
           } catch (e1) {
             // Strategy 2: Exact label match
             try {
-              await select.selectOption({ label: field.value }, { timeout: 3000 });
+              await combobox.selectOption({ label: field.value }, { timeout: 2000 });
               matched = true;
             } catch (e2) {
-              // Strategy 3: Partial text match (e.g., "United States (+1)" contains "+1")
-              const options = await select.locator('option').all();
+              // Strategy 3: Case-insensitive partial match
+              const options = await combobox.locator('option').all();
               for (const option of options) {
                 const text = await option.textContent();
-                if (text && (text.includes(field.value) || field.value.includes(text.trim()))) {
-                  await select.selectOption({ label: text });
+                const cleanText = text ? text.trim() : '';
+                const cleanValue = field.value.trim();
+
+                // Check if text contains value or vice versa (case-insensitive)
+                if (cleanText.toLowerCase().includes(cleanValue.toLowerCase()) ||
+                    cleanValue.toLowerCase().includes(cleanText.toLowerCase())) {
+                  await combobox.selectOption({ label: text });
                   matched = true;
                   break;
                 }
@@ -414,18 +487,27 @@ export class LLMAgent {
 
               if (!matched) {
                 // Log available options for debugging
-                const available = await Promise.all(options.map(o => o.textContent()));
-                throw new Error(`No matching option. Wanted: "${field.value}", Available: [${available.join(', ')}]`);
+                const available = await Promise.all(options.map(async o => await o.textContent()));
+                console.warn(`  ⚠️  No matching option for "${elementName}". Wanted: "${field.value}", Available: [${available.join(', ')}]`);
               }
             }
           }
+
         } else if (field.field_type === 'checkbox') {
-          if (field.value === 'true' || field.value === true) {
-            await this.page.check('input[type="checkbox"]');
+          const checkbox = this.page.getByRole('checkbox', { name: elementName });
+          if (field.value === 'true' || field.value === true || field.value === 'yes') {
+            await checkbox.check({ timeout: 3000 });
+          } else {
+            await checkbox.uncheck({ timeout: 3000 });
           }
+
+        } else if (field.field_type === 'textarea') {
+          const textarea = this.page.getByRole('textbox', { name: elementName });
+          await textarea.fill(field.value, { timeout: 3000 });
         }
+
       } catch (error) {
-        console.warn(`  ⚠️  Could not fill field "${field.ref || field.field_type}": ${error.message}`);
+        console.warn(`  ⚠️  Could not fill field "${fieldLabel}" [${field.ref}]: ${error.message}`);
       }
     }
   }
@@ -458,7 +540,7 @@ export class LLMAgent {
     await this._waitForEnter();
 
     console.log('📤 Submitting application...');
-    await this._clickElement(decision.element_description);
+    await this._clickElement(decision.element_description, decision.element_ref);
     await this._delay(2000);
 
     // Take screenshot of confirmation
