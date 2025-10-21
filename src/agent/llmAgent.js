@@ -215,7 +215,7 @@ export class LLMAgent {
         try {
           // Find Next/Continue button from current snapshot
           const nextButton = Array.from(this.elementMap.entries())
-            .find(([ref, info]) =>
+            .find(([_ref, info]) =>
               info.role === 'button' &&
               info.name &&
               info.name.match(/next|continue|review/i)
