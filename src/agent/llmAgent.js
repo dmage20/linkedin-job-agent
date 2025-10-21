@@ -210,16 +210,8 @@ export class LLMAgent {
         await this._clickElement(decision.element_description, decision.element_ref);
       } else if (decision.action === 'fill') {
         await this._fillFields(decision.fields);
-        // After filling, click next
-        await this._delay(1000);
-        // Find Next button from the last snapshot
-        const nextButton = Array.from(this.elementMap.entries())
-          .find(([ref, info]) => info.role === 'button' && info.name && info.name.match(/next|continue/i));
-        if (nextButton) {
-          await this._clickElement(nextButton[1].name, nextButton[0]);
-        } else {
-          await this._clickElement('Next');
-        }
+        // Let LLM decide when to click Next in the next iteration
+        // This allows for validation to complete and is more aligned with LLM-driven approach
       } else if (decision.action === 'pause_for_manual') {
         await this._handlePause(decision);
       } else if (decision.action === 'error') {
@@ -500,6 +492,11 @@ export class LLMAgent {
           } else {
             await checkbox.uncheck({ timeout: 3000 });
           }
+
+        } else if (field.field_type === 'radio') {
+          const radio = this.page.getByRole('radio', { name: elementName });
+          // Radio buttons are checked when selected (no uncheck needed)
+          await radio.check({ timeout: 3000 });
 
         } else if (field.field_type === 'textarea') {
           const textarea = this.page.getByRole('textbox', { name: elementName });
