@@ -210,8 +210,24 @@ export class LLMAgent {
         await this._clickElement(decision.element_description, decision.element_ref);
       } else if (decision.action === 'fill') {
         await this._fillFields(decision.fields);
-        // Let LLM decide when to click Next in the next iteration
-        // This allows for validation to complete and is more aligned with LLM-driven approach
+
+        // After filling, automatically advance to next step
+        try {
+          // Find Next/Continue button from current snapshot
+          const nextButton = Array.from(this.elementMap.entries())
+            .find(([ref, info]) =>
+              info.role === 'button' &&
+              info.name &&
+              info.name.match(/next|continue|review/i)
+            );
+
+          if (nextButton) {
+            await this._clickElement(nextButton[1].name, nextButton[0]);
+          }
+        } catch (error) {
+          // If auto-click fails, LLM will handle it in next iteration
+          console.log(`   Note: Auto-click Next failed, LLM will decide next action`);
+        }
       } else if (decision.action === 'pause_for_manual') {
         await this._handlePause(decision);
       } else if (decision.action === 'error') {
