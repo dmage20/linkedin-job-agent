@@ -342,19 +342,31 @@ export class LLMAgent {
         return;
       } catch (e) {}
 
-      // Strategy 2: Try partial match
+      // Strategy 2: Extract key action words and try those
+      // e.g., "Submit the job application for X" -> try "Submit application" or "Submit"
+      const keyWords = ['Easy Apply', 'Submit application', 'Submit', 'Next', 'Continue', 'Review'];
+      for (const keyword of keyWords) {
+        if (description.toLowerCase().includes(keyword.toLowerCase())) {
+          try {
+            await page.getByRole('button', { name: new RegExp(keyword, 'i') }).click({ timeout: 2000 });
+            return;
+          } catch (e) {}
+        }
+      }
+
+      // Strategy 3: Try partial match with full description
       try {
         await page.getByRole('button', { name: new RegExp(description, 'i') }).click({ timeout: 3000 });
         return;
       } catch (e) {}
 
-      // Strategy 3: Try as link
+      // Strategy 4: Try as link
       try {
         await page.getByRole('link', { name: description }).click({ timeout: 3000 });
         return;
       } catch (e) {}
 
-      // Strategy 4: Generic text search
+      // Strategy 5: Generic text search
       await page.getByText(description, { exact: false }).first().click({ timeout: 3000 });
 
     } catch (error) {
@@ -375,14 +387,45 @@ export class LLMAgent {
         if (field.field_type === 'textbox') {
           await this.page.fill(`input[type="text"]`, field.value);
         } else if (field.field_type === 'combobox') {
-          await this.page.selectOption('select', field.value);
+          // Try multiple strategies to match dropdown options
+          const select = this.page.locator('select').first();
+          let matched = false;
+
+          // Strategy 1: Exact value match
+          try {
+            await select.selectOption(field.value, { timeout: 3000 });
+            matched = true;
+          } catch (e1) {
+            // Strategy 2: Exact label match
+            try {
+              await select.selectOption({ label: field.value }, { timeout: 3000 });
+              matched = true;
+            } catch (e2) {
+              // Strategy 3: Partial text match (e.g., "United States (+1)" contains "+1")
+              const options = await select.locator('option').all();
+              for (const option of options) {
+                const text = await option.textContent();
+                if (text && (text.includes(field.value) || field.value.includes(text.trim()))) {
+                  await select.selectOption({ label: text });
+                  matched = true;
+                  break;
+                }
+              }
+
+              if (!matched) {
+                // Log available options for debugging
+                const available = await Promise.all(options.map(o => o.textContent()));
+                throw new Error(`No matching option. Wanted: "${field.value}", Available: [${available.join(', ')}]`);
+              }
+            }
+          }
         } else if (field.field_type === 'checkbox') {
           if (field.value === 'true' || field.value === true) {
             await this.page.check('input[type="checkbox"]');
           }
         }
       } catch (error) {
-        console.warn(`  ⚠️  Could not fill field: ${error.message}`);
+        console.warn(`  ⚠️  Could not fill field "${field.ref || field.field_type}": ${error.message}`);
       }
     }
   }

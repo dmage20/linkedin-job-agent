@@ -94,7 +94,7 @@ async function main() {
   // Load user profile
   console.log('📋 Loading user profile...');
   const userProfile = loadUserProfile();
-  console.log(`✓ Profile loaded: ${userProfile.personalInfo.name}\n`);
+  console.log(`✓ Profile loaded: ${userProfile.personalInfo.firstName} ${userProfile.personalInfo.lastName}\n`);
 
   // Create agent
   const agent = new LLMAgent({
