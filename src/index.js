@@ -1,200 +1,63 @@
 /**
- * LinkedIn Job Application Agent - MCP Version
- * Uses Playwright MCP Server for robust browser automation
+ * LinkedIn Job Application Agent - LLM-Driven Version
+ * Uses Claude API to make intelligent navigation decisions
  */
 
 import { config } from 'dotenv';
 import { readFileSync } from 'fs';
-import { PlaywrightMCPClient } from './agent/mcpClient.js';
-import { MCPClaudeJobAgent } from './agent/mcpClaudeAgent.js';
-import { OllamaJobAgent } from './agent/ollamaJobAgent.js';
+import { LLMAgent } from './agent/llmAgent.js';
 
 // Load environment variables
 config();
 
-class JobApplicationAgent {
-  constructor() {
-    this.mcpClient = null;
-    this.claudeAgent = null;
-    this.userProfile = null;
-  }
+/**
+ * Parse command line arguments
+ */
+function parseArgs() {
+  const args = process.argv.slice(2);
 
-  /**
-   * Initialize the agent
-   */
-  async init() {
-    try {
-      const useLocalLLM = process.env.USE_LOCAL_LLM === 'true';
+  let jobUrl = null;
+  let model = 'haiku'; // Default to cheaper model
 
-      console.log('🤖 LinkedIn Job Application Agent - MCP Powered\n');
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
 
-      if (useLocalLLM) {
-        const ollamaModel = process.env.OLLAMA_MODEL || 'llama3.1:8b';
-        console.log('🧪 Running in LOCAL MODE with Ollama');
-        console.log(`   Model: ${ollamaModel}`);
-        if (ollamaModel === 'llama3.1:8b') {
-          console.log('   RAM needed: ~5.6 GB');
-        } else if (ollamaModel === 'llama3.2:3b') {
-          console.log('   RAM needed: ~2 GB (low-RAM mode)');
-        }
-        console.log('   Cost: $0 (FREE!)\n');
-      } else {
-        console.log('🌐 Running in PRODUCTION MODE with Claude API');
-        console.log('   Model: claude-3-7-sonnet-20250219\n');
-
-        // Check for API key only in production mode
-        if (!process.env.ANTHROPIC_API_KEY) {
-          console.error('❌ ANTHROPIC_API_KEY not found in .env file');
-          console.error('Please add your Anthropic API key to the .env file');
-          console.error('Get your API key from: https://console.anthropic.com/');
-          console.error('\nAlternatively, use local mode: USE_LOCAL_LLM=true npm start <job-url>');
-          process.exit(1);
-        }
-      }
-
-      // Load user profile
-      this.loadUserProfile();
-
-      // Start MCP client
-      this.mcpClient = new PlaywrightMCPClient();
-      await this.mcpClient.start();
-
-      // Initialize appropriate agent based on mode
-      if (useLocalLLM) {
-        this.claudeAgent = new OllamaJobAgent(
-          this.mcpClient,
-          this.userProfile
-        );
-      } else {
-        this.claudeAgent = new MCPClaudeJobAgent(
-          this.mcpClient,
-          this.userProfile,
-          process.env.ANTHROPIC_API_KEY
-        );
-      }
-
-      console.log('✓ Agent initialized\n');
-
-      return true;
-    } catch (error) {
-      console.error('❌ Initialization error:', error.message);
-      return false;
+    if (arg.startsWith('--model=')) {
+      model = arg.split('=')[1];
+    } else if (arg === '--model' && i + 1 < args.length) {
+      model = args[i + 1];
+      i++;
+    } else if (!arg.startsWith('--')) {
+      jobUrl = arg;
     }
   }
 
-  /**
-   * Load user profile
-   */
-  loadUserProfile() {
-    try {
-      const profilePath = './src/config/user-profile.json';
-      const profileData = readFileSync(profilePath, 'utf-8');
-      this.userProfile = JSON.parse(profileData);
-      console.log('✓ User profile loaded\n');
-    } catch (error) {
-      console.error('❌ Could not load user profile');
-      console.error('Please create src/config/user-profile.json from the example template');
-      process.exit(1);
-    }
+  return { jobUrl, model };
+}
+
+/**
+ * Load user profile
+ */
+function loadUserProfile() {
+  try {
+    const profilePath = './src/config/user-profile.json';
+    const profileData = readFileSync(profilePath, 'utf-8');
+    return JSON.parse(profileData);
+  } catch (error) {
+    console.error('\n❌ Could not load user profile');
+    console.error('Please create src/config/user-profile.json from the example template\n');
+    process.exit(1);
   }
+}
 
-  /**
-   * Manual login flow
-   */
-  async authenticate() {
-    console.log('🔐 Manual Login Mode\n');
-    console.log('Opening LinkedIn in browser...\n');
-
-    try {
-      // Navigate to LinkedIn - this should open the browser window
-      const navResult = await this.mcpClient.navigate('https://www.linkedin.com');
-      console.log('Navigation result:', navResult);
-
-      // Wait a moment for page to load
-      await new Promise(resolve => setTimeout(resolve, 3000));
-    } catch (error) {
-      console.error('Error during navigation:', error);
-      throw error;
-    }
-
-    console.log('=' .repeat(80));
-    console.log('👤 Please log into LinkedIn in the browser window');
-    console.log('   Complete any 2FA/verification if needed');
-    console.log('   Once logged in, press Enter here to continue...');
-    console.log('='.repeat(80) + '\n');
-
-    await this.waitForUserInput();
-
-    console.log('✓ Proceeding with logged-in session\n');
-    return true;
-  }
-
-  /**
-   * Wait for user input
-   */
-  async waitForUserInput() {
-    return new Promise((resolve) => {
-      const stdin = process.stdin;
-      stdin.setRawMode(true);
-      stdin.resume();
-      stdin.setEncoding('utf8');
-
-      const onData = (key) => {
-        if (key === '\r' || key === '\n') {
-          stdin.setRawMode(false);
-          stdin.pause();
-          stdin.removeListener('data', onData);
-          resolve();
-        } else if (key === '\u0003') {
-          console.log('\n\n❌ Cancelled by user');
-          process.exit(0);
-        }
-      };
-
-      stdin.on('data', onData);
-    });
-  }
-
-  /**
-   * Apply to a job using Claude agent
-   */
-  async applyToJob(jobUrl) {
-    try {
-      console.log('Starting MCP-powered job application...\n');
-
-      const result = await this.claudeAgent.applyToJob(jobUrl);
-
-      if (result && result.success) {
-        console.log('\n✅ Success:', result.message);
-
-        // Take screenshot
-        const timestamp = Date.now();
-        await this.mcpClient.takeScreenshot(`screenshots/application-${timestamp}.png`);
-        console.log(`📸 Screenshot saved: screenshots/application-${timestamp}.png`);
-
-        return true;
-      } else {
-        console.log('\n⚠️  Application incomplete:', result?.message || 'Unknown error');
-        return false;
-      }
-
-    } catch (error) {
-      console.error('❌ Error applying to job:', error.message);
-      return false;
-    }
-  }
-
-  /**
-   * Cleanup
-   */
-  async cleanup() {
-    console.log('\n🧹 Cleaning up...');
-
-    if (this.mcpClient) {
-      await this.mcpClient.close();
-    }
-
-    console.log('✓ MCP Server closed');
+/**
+ * Validate environment variables
+ */
+function validateEnv() {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('\n❌ Missing ANTHROPIC_API_KEY environment variable');
+    console.error('Please add ANTHROPIC_API_KEY to your .env file\n');
+    process.exit(1);
   }
 }
 
@@ -202,32 +65,59 @@ class JobApplicationAgent {
  * Main execution
  */
 async function main() {
-  const agent = new JobApplicationAgent();
+  console.log('🤖 LinkedIn Job Application Agent - LLM-Driven Mode\n');
+
+  // Parse arguments
+  const { jobUrl, model } = parseArgs();
+
+  if (!jobUrl) {
+    console.log('📖 Usage: npm start <job-url> [--model=sonnet|haiku]\n');
+    console.log('Examples:');
+    console.log('  npm start https://www.linkedin.com/jobs/view/1234567890');
+    console.log('  npm start https://www.linkedin.com/jobs/view/1234567890 --model=sonnet\n');
+    console.log('Models:');
+    console.log('  haiku  - Claude 3.5 Haiku (faster, cheaper, ~$0.001/application)');
+    console.log('  sonnet - Claude 3.5 Sonnet (more capable, ~$0.007/application)\n');
+    process.exit(0);
+  }
+
+  // Validate model
+  if (!['haiku', 'sonnet'].includes(model)) {
+    console.error(`\n❌ Invalid model: ${model}`);
+    console.error('Valid models: haiku, sonnet\n');
+    process.exit(1);
+  }
+
+  // Validate environment
+  validateEnv();
+
+  // Load user profile
+  console.log('📋 Loading user profile...');
+  const userProfile = loadUserProfile();
+  console.log(`✓ Profile loaded: ${userProfile.personalInfo.name}\n`);
+
+  // Create agent
+  const agent = new LLMAgent({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model,
+    userProfile
+  });
 
   try {
-    const jobUrl = process.argv[2];
+    // Initialize browser
+    await agent.initialize();
 
-    if (!jobUrl) {
-      console.log('\n📖 Usage: npm start <job-url>');
-      console.log('Example: npm start https://www.linkedin.com/jobs/view/1234567890\n');
-      process.exit(0);
-    }
-
-    // Initialize
-    await agent.init();
-
-    // Manual login
-    await agent.authenticate();
-
-    // Apply to the job
+    // Apply to job
     await agent.applyToJob(jobUrl);
+
+    console.log('\n✅ Application process completed!\n');
 
   } catch (error) {
     console.error('\n❌ Fatal error:', error.message);
-    console.error(error.stack);
-  } finally {
-    await agent.cleanup();
-    process.exit(0);
+    if (process.env.DEBUG) {
+      console.error(error.stack);
+    }
+    process.exit(1);
   }
 }
 
