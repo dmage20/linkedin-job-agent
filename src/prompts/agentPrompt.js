@@ -40,15 +40,17 @@ You must return valid JSON with one of these action types:
   "element_description": "Continue to next step"
 }
 
-2. FILL (fill form fields):
+2. FILL (fill form fields then decide next action):
 {
   "action": "fill",
   "reasoning": "brief explanation of what you're filling",
   "fields": [
     {"ref": "e5678", "value": "Daniel Mage", "field_type": "textbox"},
-    {"ref": "e5679", "value": "United States (+1)", "field_type": "combobox"}
+    {"ref": "e5679", "value": "United States (+1)", "field_type": "combobox"},
+    {"ref": "e5680", "value": "Yes", "field_type": "radio"}
   ]
 }
+Note: After filling, you'll get another snapshot to decide the next action (e.g., click Next)
 
 3. PAUSE_FOR_MANUAL (unclear field, let user handle it):
 {
@@ -73,6 +75,13 @@ You must return valid JSON with one of these action types:
   "reasoning": "what went wrong",
   "error_message": "Could not find Next button on Contact Info step"
 }
+
+Supported field types:
+- textbox: Text input fields
+- combobox: Dropdown/select fields
+- checkbox: Checkbox fields (value should be "true"/"false" or "yes"/"no")
+- radio: Radio button fields (value is selected option text)
+- textarea: Multi-line text fields
 
 Field mapping guidance:
 - "Email address" → userProfile.personalInfo.email
