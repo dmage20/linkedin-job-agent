@@ -1,233 +1,143 @@
 # LinkedIn Job Application Agent
 
-An AI-powered agent that automates LinkedIn job applications using browser automation.
+An intelligent agent that automates LinkedIn Easy Apply job applications using Claude AI and browser automation.
 
-## Current Status: Phase 1 - MVP ✅
+## Overview
 
-The Phase 1 MVP supports:
-- ✅ LinkedIn authentication
-- ✅ Automated form filling for Easy Apply jobs
-- ✅ Resume upload
-- ✅ Multi-step application handling
-- ✅ Manual review before submission
+This agent uses Claude's LLM to intelligently navigate LinkedIn Easy Apply forms, filling fields based on your profile and making context-aware decisions about form progression. It employs a ref-based element targeting system for precise field selection and robust form handling.
 
-## Prerequisites
+## Features
 
-- Node.js 18+ installed
-- A LinkedIn account
-- Your resume in PDF format
+- **LLM-Driven Navigation**: Claude analyzes page state and makes intelligent decisions about what to fill and when to proceed
+- **Ref-Based Element Targeting**: Unique identifiers for precise field selection, preventing infinite loops and duplicate fills
+- **Multi-Field Type Support**: Handles textboxes, dropdowns, checkboxes, radio buttons, and textareas
+- **Cost-Effective**: Choose between Haiku (~$0.001/application) or Sonnet (~$0.007/application) models
+- **Manual Review**: Pause before final submission for human verification
+- **Smart Matching**: Case-insensitive dropdown matching with partial text support
 
 ## Quick Start
 
-### 1. Install Dependencies
-
+### 1. Installation
 ```bash
-cd linkedin-job-agent
 npm install
 ```
 
-This will install:
-- Playwright (browser automation)
-- dotenv (environment variables)
-
-### 2. Configure LinkedIn Credentials
-
-Create a `.env` file in the project root:
-
+### 2. Configuration
 ```bash
+# Create credentials file
 cp .env.example .env
-```
+# Edit .env and add your ANTHROPIC_API_KEY
 
-Edit `.env` and add your LinkedIn credentials:
-
-```
-LINKEDIN_EMAIL=your-email@example.com
-LINKEDIN_PASSWORD=your-password-here
-```
-
-**⚠️ IMPORTANT:** Never commit your `.env` file to version control!
-
-### 3. Set Up Your Profile
-
-Create your user profile configuration:
-
-```bash
+# Create user profile
 cp src/config/user-profile.example.json src/config/user-profile.json
+# Edit user-profile.json with your information
+
+# Create required directories
+mkdir -p documents screenshots logs
 ```
 
-Edit `src/config/user-profile.json` with your information:
-- Personal details (name, email, phone, location)
-- Work experience
-- Education
-- Skills
-- Path to your resume file
-- Job preferences
-
-### 4. Prepare Your Documents
-
-Create a `documents` folder and add your resume:
-
+### 3. Run
 ```bash
-mkdir -p documents
-# Copy your resume to: documents/resume.pdf
-```
-
-Make sure the path in `user-profile.json` matches your resume location.
-
-### 5. Create Screenshots Folder
-
-```bash
-mkdir -p screenshots
-```
-
-This is where confirmation screenshots will be saved.
-
-### 6. Run the Agent
-
-```bash
-npm start <linkedin-job-url>
-```
-
-Example:
-
-```bash
+# Apply to a job (default: Haiku model)
 npm start https://www.linkedin.com/jobs/view/1234567890
+
+# Use Sonnet model for more complex forms
+npm start https://www.linkedin.com/jobs/view/1234567890 --model=sonnet
 ```
 
 ## How It Works
 
-1. **Launch**: The agent opens a browser window
-2. **Login**: Automatically logs into LinkedIn with your credentials
-3. **Navigate**: Goes to the specified job posting
-4. **Easy Apply**: Clicks the "Easy Apply" button
-5. **Auto-Fill**: Fills form fields with your profile data
-6. **Upload**: Attaches your resume
-7. **Review**: Pauses for you to review the application
-8. **Submit**: Submits after you press Enter
+1. **Authentication**: Launches browser and waits for LinkedIn login (manual step)
+2. **Page Analysis**: Captures accessibility tree snapshot of the page
+3. **LLM Decision**: Claude analyzes snapshot and decides next action (fill/click/submit)
+4. **Element Targeting**: Uses ref-based system to target specific form fields
+5. **Form Progression**: Automatically advances through multi-step forms
+6. **Manual Review**: Pauses before submission for user confirmation
 
-## Features
+## Architecture
 
-### Smart Form Filling
+### Core Components
 
-The agent automatically detects and fills:
-- Phone number
-- Location/City
-- Years of experience
-- Visa sponsorship status
-- Work authorization
-- Text area responses (why this company, etc.)
+- **LLMAgent** (`src/agent/llmAgent.js`): Main orchestrator with ref-based element tracking
+- **AgentPrompt** (`src/prompts/agentPrompt.js`): System prompts that guide Claude's decisions
+- **SnapshotProcessor** (`src/utils/snapshotProcessor.js`): Filters accessibility tree to reduce token usage
 
-### Multi-Step Support
+### Ref-Based Element System
 
-LinkedIn Easy Apply forms often have multiple steps. The agent:
-- Detects the current step
-- Fills all fields in each step
-- Clicks "Next" to proceed
-- Continues until reaching the final submission
+Each interactive element receives a unique ref (e1, e2, e3...) that maps to:
+- Element role (button, textbox, combobox, etc.)
+- Element name/label
+- Current value and state
 
-### Safety Features
+This enables precise targeting: "Fill textbox e5 (Years of Ruby experience)" instead of "Fill first textbox"
 
-- **Manual Review**: Always pauses before submission
-- **Headless: false**: Browser is visible so you can monitor
-- **Human-like Delays**: Random delays to avoid detection
-- **Screenshot Confirmation**: Saves proof of application
+## Configuration Files
 
-## Project Structure
+### User Profile (`src/config/user-profile.json`)
+Structured data containing:
+- Personal information (name, email, phone, location)
+- Work experience and education
+- Skills and preferences
+- Resume file path
 
+### Environment Variables (`.env`)
 ```
-linkedin-job-agent/
-├── src/
-│   ├── index.js              # Main application
-│   ├── browser/
-│   │   └── auth.js           # LinkedIn authentication
-│   ├── jobs/
-│   │   └── formFiller.js     # Form detection & filling
-│   └── config/
-│       └── user-profile.json # Your profile data
-├── documents/                # Your resume & docs
-├── screenshots/              # Application confirmations
-├── PROGRESS.md               # Project progress tracker
-├── .env                      # Your credentials (DO NOT COMMIT)
-└── package.json              # Dependencies
+ANTHROPIC_API_KEY=your-api-key-here
 ```
 
-## Limitations (Phase 1)
+## Supported Features
 
-- ✅ Only works with "Easy Apply" jobs
-- ✅ Requires manual review before submission
-- ✅ One job at a time (no batch processing yet)
-- ✅ No AI-generated cover letters yet
-- ✅ Basic form field detection
+✅ LinkedIn Easy Apply forms
+✅ Multi-step form navigation
+✅ Text inputs, dropdowns, checkboxes, radio buttons
+✅ Resume upload
+✅ Work authorization questions
+✅ Technical experience questions
 
-## Coming in Future Phases
+⚠️ Not supported: External application links, custom assessments, CAPTCHA (requires manual completion)
 
-### Phase 2 - AI Integration
-- AI-generated cover letters tailored to each job
-- Intelligent screening question answers
-- Job description analysis
-- Skills matching
+## Cost Optimization
 
-### Phase 3 - Batch Processing
-- Search for jobs by criteria
-- Apply to multiple jobs automatically
-- Application tracking database
-- Success rate analytics
+- **Haiku model**: ~$0.001 per application (recommended for most jobs)
+- **Sonnet model**: ~$0.007 per application (use for complex forms)
+- Snapshot filtering reduces token usage by 95-99%
+- Typical application uses 10k-30k input tokens, 1k-4k output tokens
 
-### Phase 4 - Polish
-- Web-based dashboard
-- Resume customization per job
-- Company research integration
-- Interview scheduling assistance
+## Logs
 
-## Troubleshooting
+Application logs saved to `logs/` directory:
+- `application-{timestamp}.json`: Decision history, token usage, cost summary
+- `error-{timestamp}.png`: Screenshots on error
+- `submission-{timestamp}.png`: Confirmation screenshots
 
-### "Module not found" errors
+## Safety Features
 
-Install dependencies:
-```bash
-npm install
-```
-
-### "User profile not found"
-
-Create your profile:
-```bash
-cp src/config/user-profile.example.json src/config/user-profile.json
-```
-
-### "LinkedIn credentials not found"
-
-Create `.env` file:
-```bash
-cp .env.example .env
-# Then edit .env with your credentials
-```
-
-### 2FA / CAPTCHA Prompts
-
-If you have 2-factor authentication enabled:
-1. The agent will pause
-2. Complete the 2FA challenge in the browser window
-3. The agent will continue automatically
-
-### "Easy Apply" button not found
-
-Not all LinkedIn jobs have Easy Apply. The agent will skip jobs that require external application processes.
-
-## Security Notes
-
-- **Credentials**: Stored in `.env` (gitignored)
-- **Local Only**: All data stays on your machine
-- **No Cloud**: No data sent to external servers
-- **Review Before Submit**: Always check before applications go out
+- Manual confirmation required before submission
+- All actions logged for review
+- Browser runs in visible mode for monitoring
+- Graceful error handling with screenshots
 
 ## Development
 
-Run in development mode with auto-reload:
-
 ```bash
-npm run dev
+# Run with auto-reload
+npm run dev https://www.linkedin.com/jobs/view/1234567890
+
+# Run tests
+npm test
 ```
+
+## Troubleshooting
+
+**Module not found errors**: Run `npm install`
+
+**ANTHROPIC_API_KEY not found**: Create `.env` file with your API key
+
+**User profile not found**: Create `src/config/user-profile.json` from example template
+
+**2FA/CAPTCHA prompts**: Complete manually in browser window, agent will continue automatically
+
+**Easy Apply button not found**: Job may not be Easy Apply eligible, agent will skip
 
 ## License
 
@@ -235,6 +145,4 @@ MIT
 
 ## Disclaimer
 
-This tool is for educational purposes and to assist with job applications. Use responsibly and in accordance with LinkedIn's Terms of Service. The authors are not responsible for any account restrictions or bans resulting from use of this tool.
-
-Always review applications before submission and ensure accuracy of information.
+This tool is for educational purposes and to assist with job applications. Use responsibly and in accordance with LinkedIn's Terms of Service. Always review applications before submission and ensure accuracy of information.
